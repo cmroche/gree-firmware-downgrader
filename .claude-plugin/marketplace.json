@@ -1,0 +1,12 @@
+{
+  "name": "gree-firmware-downgrader",
+  "description": "Gree firmware restoration skill for local network control.",
+  "owner": { "name": "Clifford Roche" },
+  "plugins": [
+    {
+      "name": "gree-firmware-downgrader",
+      "source": "./",
+      "description": "Restore local control to Gree HVAC devices with verified LAN-capable firmware."
+    }
+  ]
+}

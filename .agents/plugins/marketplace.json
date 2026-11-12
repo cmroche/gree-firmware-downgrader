@@ -1,0 +1,12 @@
+{
+  "name": "gree-firmware-downgrader",
+  "interface": { "displayName": "Gree Firmware Downgrader" },
+  "plugins": [
+    {
+      "name": "gree-firmware-downgrader",
+      "source": { "source": "local", "path": "./" },
+      "policy": { "installation": "AVAILABLE", "authentication": "ON_INSTALL" },
+      "category": "Productivity"
+    }
+  ]
+}
