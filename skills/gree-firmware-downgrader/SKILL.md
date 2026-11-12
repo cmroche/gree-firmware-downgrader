@@ -19,7 +19,6 @@ Resolve bundled references relative to this `SKILL.md`, not the user's current d
 
 - [Firmware-version reference](references/firmware-versions.md), then compare its linked public upstream cloud-only table, HIDs and MIDs. Preserve the snapshot date and record which revision/evidence selected the targets; do not edit the installed plugin cache.
 - [Firmware acquisition reference](references/firmware-download.md) for regional lookup, historical provenance, TLS/URL safety, checksums and throttling. Acquisition sends no device upgrade packets; installation is this skill's separate, explicitly authorized phase.
-- [Firmware update protocol](references/firmware-update-protocol.md) for message structures, encryption/key selection, acknowledgement semantics and firmware-qualified image validation limits.
 
 Use Python 3.10+ and `greeclimate==4.2.5`, the client API used by the recipes below. Reuse a compatible environment or create a private run directory and environment without changing global Python or plugin files:
 

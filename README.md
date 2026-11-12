@@ -2,7 +2,7 @@
 
 An assistant skill that finds Gree HVAC devices and restores local network control using known LAN-capable firmware. It downloads firmware from Gree, asks before installing, and checks the reported firmware afterward.
 
-[Firmware version reference](skills/gree-firmware-downgrader/references/firmware-versions.md) · [Firmware update protocol](skills/gree-firmware-downgrader/references/firmware-update-protocol.md)
+[Firmware version reference](skills/gree-firmware-downgrader/references/firmware-versions.md)
 
 ## Install
 
