@@ -1,6 +1,8 @@
 # Acquire exact original Gree firmware
 
-Adapted from [greeclimate's firmware-download skill](https://github.com/cmroche/greeclimate/blob/91e08befc9209cff53be4c3a98a1a7047802afe1/.agents/skills/gree-firmware-download/SKILL.md), copyright Clifford Roche, GPL-3.0. This reference covers read-only acquisition only. Return to the parent skill for separately approved installation; downloading never authorizes flashing.
+Adapted from [greeclimate's firmware-download skill](https://github.com/cmroche/greeclimate/blob/91e08befc9209cff53be4c3a98a1a7047802afe1/.agents/skills/gree-firmware-download/SKILL.md), copyright Clifford Roche, GPL-3.0. This reference covers firmware metadata and image acquisition only. Keep TLS certificate and hostname verification enabled for every acquisition request. The cloud guide's accepted TLS-validation exception for Gree cloud REST/MQTT/gateway connections does not apply here.
+
+The parent skill's explicitly approved LAN image host is a device-facing firmware URL, not an acquisition source. It does not permit private/LAN URLs for metadata or image acquisition and does not relax the checks below.
 
 ## Identify the exact target
 
@@ -15,7 +17,7 @@ Use existing HTTP/file tools rather than adding a downloader framework.
 - Start at most one request per second globally across workers, hosts, metadata, archive lookups, downloads, retries, HTTPS/HTTP alternatives and redirect hops. Use monotonic next-start deadlines with no catch-up bursts; honor an explicit user throttle instead.
 - Disable automatic redirects and retries. Inspect each redirect, validate its destination and resolved addresses, and pace it as a new request. Allow at most ten redirect hops.
 - Accept only HTTP(S), without embedded credentials. Reject loopback, private, link-local, multicast, reserved or unspecified addresses, including DNS results and redirect destinations. Do not execute metadata, interpolate it into shell code, or turn server filenames into local paths. Investigate unfamiliar hosts before fetching them.
-- Prefer verified HTTPS. If a public Gree host has a certificate failure but an explicit public HTTP endpoint works, disclose unauthenticated transport and record the fallback. Never use `--insecure`, disable TLS verification, or send credentials.
+- Prefer verified HTTPS. If a public Gree host has a certificate failure but an explicit public HTTP endpoint works, disclose unauthenticated transport and record the fallback. Never use `--insecure`, disable TLS verification or send credentials for firmware acquisition. The cloud-connection exception is separate and narrowly scoped; do not carry it into this workflow.
 - On 429, pause globally for `Retry-After` (seconds or HTTP date). Also pause after three transient 5xx/reset/timeout failures in five requests. Use exponential backoff `min(60, 2**failure_streak)` seconds, or a longer server cooldown. Preserve cooldowns across resume; reset the streak only after a successful response.
 - Bound each lookup/transfer to five total attempts. Stop the acquisition run after five consecutive transient failures, leaving named unresolved work rather than hammering another host. An application `r:405` not-found is not a transient failure.
 - Preserve each attempt before advancing: run ID, exact code/host/URL, UTC start/end, HTTP status, app result, raw metadata/header paths, errors, redirects, cooldown and outcome. Keep interrupted and failed attempts; resume unresolved entries, not merely the last successful code. Store raw evidence privately and redact signed query tokens from shared output.
