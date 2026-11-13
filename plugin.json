@@ -1,9 +1,0 @@
-{
-  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
-  "name": "gree-firmware-downgrader",
-  "version": "1.0.2",
-  "description": "Restore local control to Gree HVAC devices with verified LAN-capable firmware.",
-  "author": { "name": "Clifford Roche" },
-  "repository": "https://github.com/cmroche/gree-firmware-downgrader",
-  "license": "GPL-3.0-only"
-}

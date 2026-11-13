@@ -1,20 +1,20 @@
-#!/usr/bin/env python3
 """Conservative firmware download preflight and temporary LAN serving."""
 
 from __future__ import annotations
 
-import argparse
 import hashlib
 import http.client
 import http.server
 import ipaddress
-import json
 import os
 import re
 import socket
 import stat
 import sys
+import threading
 import time
+from collections.abc import Mapping
+from contextlib import contextmanager
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -351,12 +351,18 @@ def _is_rfc1918(value):
     )
 
 
-def _handler_for(fd, info, expected_hash):
+def _handler_for(images, completed_downloads):
     class FirmwareRequestHandler(http.server.BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
+        # shortcut: TCP can still split buffered headers/body; persistent splits need a receiver fix.
+        wbufsize = 2 * _CHUNK_SIZE
+
+        def setup(self):
+            self.request.settimeout(_HTTP_TIMEOUT)
+            super().setup()
 
         def log_request(self, code="-", size="-"):
-            target = "/firmware.bin" if self.path == "/firmware.bin" else "<rejected>"
+            target = self.path if self.path in images else "<rejected>"
             timestamp = time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime())
             print(
                 f"{timestamp} {self.client_address[0]} {target} {code}",
@@ -365,12 +371,14 @@ def _handler_for(fd, info, expected_hash):
 
         def _respond(self, body):
             self.close_connection = True
-            if self.path != "/firmware.bin":
+            image = images.get(self.path)
+            if image is None:
                 self.send_response(404)
                 self.send_header("Content-Length", "0")
                 self.send_header("Connection", "close")
                 self.end_headers()
                 return
+            fd, info, expected_hash = image
             try:
                 current = _hash_fd(fd)
             except FirmwareError:
@@ -391,25 +399,30 @@ def _handler_for(fd, info, expected_hash):
             self.send_header("FileMd5", current["md5"])
             self.send_header("Connection", "close")
             self.end_headers()
-            if body:
-                sha = hashlib.sha256()
-                md5 = hashlib.md5()
-                offset = 0
+            if not body:
+                return
+            sha = hashlib.sha256()
+            md5 = hashlib.md5()
+            offset = 0
+            try:
                 os.lseek(fd, 0, os.SEEK_SET)
                 while offset < info["length"]:
                     block = os.read(fd, min(_CHUNK_SIZE, info["length"] - offset))
                     if not block:
-                        self.close_connection = True
                         return
                     offset += len(block)
                     sha.update(block)
                     md5.update(block)
                     self.wfile.write(block)
-                if (
-                    sha.hexdigest() != expected_hash
-                    or md5.hexdigest() != current["md5"]
-                ):
-                    self.close_connection = True
+                self.wfile.flush()
+            except OSError:
+                return
+            if (
+                sha.hexdigest() != expected_hash
+                or md5.hexdigest() != current["md5"]
+            ):
+                return
+            completed_downloads[(self.client_address[0], self.path)] = time.monotonic()
 
         def do_GET(self):
             self._respond(True)
@@ -420,71 +433,81 @@ def _handler_for(fd, info, expected_hash):
     return FirmwareRequestHandler
 
 
-def serve(image, sha256, bind):
-    """Serve only the verified image on fixed HTTP port 80 until interrupted."""
-    expected_hash = _expected_hash(sha256)
-    fd = _open_image(image)
+@contextmanager
+def host(images, bind):
+    """Serve pinned, verified firmware routes on private IPv4 port 80."""
+    if not isinstance(images, Mapping) or not images:
+        raise FirmwareError("At least one firmware route must be supplied.")
+    if not isinstance(bind, str):
+        raise FirmwareError("Bind address must be a literal RFC1918 IPv4 address.")
     try:
-        info = _hash_fd(fd)
-        if info["sha256"] != expected_hash:
-            raise FirmwareError("Firmware image SHA-256 does not match.")
-        if not _is_rfc1918(bind):
-            raise FirmwareError("Bind address must be a literal RFC1918 IPv4 address.")
+        address = ipaddress.IPv4Address(bind)
+    except ipaddress.AddressValueError:
+        raise FirmwareError(
+            "Bind address must be a literal RFC1918 IPv4 address."
+        ) from None
+    if not _is_rfc1918(address):
+        raise FirmwareError("Bind address must be a literal RFC1918 IPv4 address.")
+
+    pinned = {}
+    server = None
+    thread = None
+    started = False
+    try:
+        for route, spec in images.items():
+            if not isinstance(route, str) or not re.fullmatch(
+                r"/firmware/[0-9a-f]{64}\.bin", route
+            ):
+                raise FirmwareError("Firmware route must be a SHA-256 firmware path.")
+            try:
+                image_path, sha256 = spec
+            except (TypeError, ValueError):
+                raise FirmwareError(
+                    "Each firmware route needs an image path and SHA-256."
+                ) from None
+            expected_hash = _expected_hash(sha256)
+            if route != f"/firmware/{expected_hash}.bin":
+                raise FirmwareError("Firmware route does not match its SHA-256.")
+            fd = _open_image(image_path)
+            pinned[route] = (fd, None, expected_hash)
+            info = _hash_fd(fd)
+            if info["sha256"] != expected_hash:
+                raise FirmwareError("Firmware image SHA-256 does not match.")
+            pinned[route] = (fd, info, expected_hash)
+
+        completed_downloads = {}
         try:
             server = http.server.HTTPServer(
-                (str(ipaddress.IPv4Address(bind)), 80),
-                _handler_for(fd, info, expected_hash),
+                (str(address), 80), _handler_for(pinned, completed_downloads)
             )
         except OSError as error:
             raise FirmwareError(
                 "Could not bind the approved LAN address on port 80; "
                 "no privilege or firewall changes were attempted."
             ) from error
-        print(
-            "Keep this process running throughout the install; "
-            "press Ctrl-C to stop.",
-            file=sys.stderr,
-        )
-        try:
-            server.serve_forever()
-        except KeyboardInterrupt:
-            pass
-        finally:
-            server.server_close()
+        server.completed_downloads = completed_downloads
+        ready = threading.Event()
+        server.service_actions = ready.set
+        thread = threading.Thread(target=server.serve_forever)
+        thread.start()
+        started = True
+        if not ready.wait(5):
+            raise FirmwareError("Firmware HTTP server did not start.")
+        yield server
     finally:
-        os.close(fd)
-
-
-def main(argv=None):
-    parser = argparse.ArgumentParser(
-        description="Preflight and serve an exact Gree firmware image."
-    )
-    commands = parser.add_subparsers(dest="command", required=True)
-    check = commands.add_parser(
-        "preflight", help="verify a firmware URL against the local image"
-    )
-    check.add_argument("--url", required=True)
-    check.add_argument("--image", required=True)
-    check.add_argument("--sha256", required=True)
-    check.add_argument("--allow-lan", action="store_true")
-    serve_parser = commands.add_parser(
-        "serve", help="serve the verified image on LAN port 80"
-    )
-    serve_parser.add_argument("--image", required=True)
-    serve_parser.add_argument("--sha256", required=True)
-    serve_parser.add_argument("--bind", required=True)
-    args = parser.parse_args(argv)
-    try:
-        if args.command == "preflight":
-            result = preflight(
-                args.url, args.image, args.sha256, allow_lan=args.allow_lan
-            )
-            print(json.dumps(result, sort_keys=True))
-        else:
-            serve(args.image, args.sha256, args.bind)
-    except FirmwareError as error:
-        parser.exit(1, f"firmware_http.py: error: {error}\n")
-
-
-if __name__ == "__main__":
-    main()
+        try:
+            if server is not None:
+                try:
+                    if started:
+                        try:
+                            server.shutdown()
+                        finally:
+                            thread.join()
+                finally:
+                    server.server_close()
+        finally:
+            for fd, _info, _digest in pinned.values():
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass

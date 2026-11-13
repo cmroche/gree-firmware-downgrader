@@ -3,3 +3,5 @@ __pycache__/
 .venv/
 .research/
 .gree-firmware-downgrader/
+.idea/
+.omp/

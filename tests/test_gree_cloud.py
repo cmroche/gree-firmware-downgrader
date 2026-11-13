@@ -1,7 +1,5 @@
 import asyncio
 import base64
-import contextlib
-import io
 import json
 from pathlib import Path
 import sys
@@ -10,7 +8,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skills/gree-firmware-downgrader/scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import gree_cloud as cloud
 from greeclimate_davo22.cloud_api import CloudDeviceInfo, CloudHome
@@ -20,6 +18,9 @@ KEY = "0123456789abcdef"
 OLD_HID = "362001068254+U-4MWB65VRV2.12.bin"
 TARGET_HID = "362001068254+U-4MWB65VRV2.11.bin"
 URL = "http://eu.grih.gree.com/wifiModule/image/10141/145680"
+LOCAL_CURRENT_HID = "362001000762+unit-test-current"
+LOCAL_IMAGE = str(Path(__file__).resolve().parents[1] / "firmware/362001000762-v3.33-local-only.bin")
+LOCAL_URL = "http://192.168.1.10/firmware/" + "a" * 64 + ".bin"
 
 
 def info(**changes):
@@ -107,10 +108,13 @@ class CloudProtocolTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(all(call.args[0]["t"] == "status" for call in module.exchange.call_args_list))
         self.assertIs(module.exchange.call_args_list[-1].args[1], module.cipher)
 
-    async def test_inventory_keeps_physical_gateway_and_blocks_logical_children(self):
+    async def test_inventory_keeps_physical_children_and_unreachable_rows(self):
+        unreachable_mac = "112233445566"
         api = SimpleNamespace(
             get_homes=AsyncMock(return_value=[CloudHome(id=1, name="Bench")]),
-            get_devices=AsyncMock(return_value=[info(), info(mac=MAC + "00", parent_mac=MAC)]),
+            get_devices=AsyncMock(return_value=[
+                info(), info(mac=MAC + "00", parent_mac=MAC), info(mac=unreachable_mac),
+            ]),
         )
         module = MagicMock()
         module.mac, module.transport = MAC, "mqtt"
@@ -120,14 +124,25 @@ class CloudProtocolTests(unittest.IsolatedAsyncioTestCase):
 
         def create(api, region, record):
             original(api, region, record)
+            if record.mac == unreachable_mac:
+                failed = MagicMock()
+                failed.transport = "mqtt"
+                failed.fresh_hid = AsyncMock(side_effect=asyncio.TimeoutError())
+                failed.__aenter__.return_value = failed
+                return failed
             return module
 
-        output = io.StringIO()
-        with patch.object(cloud, "CloudModule", side_effect=create), contextlib.redirect_stdout(output):
-            await cloud.inventory(api, "Europe")
-        rows = json.loads(output.getvalue())
-        self.assertEqual([(r["mac"], r["status"]) for r in rows], [(MAC, "identified"), (MAC + "00", "blocked_identity")])
-        self.assertNotIn(KEY, output.getvalue())
+        with patch.object(cloud, "CloudModule", side_effect=create):
+            rows = await cloud.inventory(api, "Europe")
+        self.assertEqual(
+            [(row["mac"], row["status"]) for row in rows],
+            [
+                (MAC, "identified"),
+                (MAC + "00", "blocked_identity"),
+                (unreachable_mac, "blocked_unreachable"),
+            ],
+        )
+        self.assertNotIn(KEY, json.dumps(rows))
 
     async def test_gateway_does_not_turn_tls_exception_into_plaintext_consent(self):
         module = cloud.CloudModule(SimpleNamespace(user_id=123), "Europe", info(version="V2.0.0"))
@@ -136,6 +151,7 @@ class CloudProtocolTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(cloud.Blocked):
                 await module.fresh_hid()
             connect.assert_not_called()
+
 
 
 class PlanTests(unittest.TestCase):
@@ -149,25 +165,33 @@ class PlanTests(unittest.TestCase):
         outer["pack"] = base64.b64encode(altered).decode()
         self.assertIsNone(cloud.decode_reply(json.dumps(outer).encode(), MAC, "requested", cipher))
 
-    def test_plan_rejects_logical_child_cross_code_reinstall_and_false_provenance(self):
-        good = {"mac": MAC, "current_hid": OLD_HID, "target_hid": TARGET_HID,
-                "image": "original.bin", "sha256": "a" * 64, "source_url": URL, "url": URL}
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "plan.json"
-            path.write_text(json.dumps(good))
-            (Path(directory) / "original.bin").write_bytes(b"plan-relative image")
-            self.assertEqual(Path(cloud.load_plan(path)["image"]).read_bytes(), b"plan-relative image")
-            for change in (
-                {"mac": MAC + "00"},
-                {"target_hid": "362001067541+U-WB05WR11V2.04.bin"},
-                {"target_hid": OLD_HID},
-                {"source_url": "http://gree.com.example.org/image.bin"},
-                {"source_url": "http://secret@grih.gree.com/image.bin"},
-            ):
-                with self.subTest(change=change):
-                    path.write_text(json.dumps({**good, **change}))
-                    with self.assertRaises(cloud.Blocked):
-                        cloud.load_plan(path)
+    def test_local_only_selection_uses_flat_filename_and_allows_unknown_or_same_hid(self):
+        plan = {
+            "mac": MAC, "current_hid": LOCAL_CURRENT_HID, "target_hid": None,
+            "image": LOCAL_IMAGE, "sha256": "a" * 64, "url": LOCAL_URL,
+            "local_only": True,
+        }
+        self.assertIsNone(cloud._dispatch_plan(plan)["target_hid"])
+        self.assertEqual(
+            cloud._dispatch_plan({**plan, "target_hid": LOCAL_CURRENT_HID})["target_hid"],
+            LOCAL_CURRENT_HID,
+        )
+        self.assertNotIn("source_url", cloud._dispatch_plan(plan))
+        with self.assertRaises(cloud.Blocked):
+            cloud._dispatch_plan({**plan, "source_url": URL})
+        with self.assertRaises(cloud.Blocked):
+            cloud._dispatch_plan({**plan, "url": URL})
+
+    def test_vendor_selection_rejects_cross_code_and_same_hid(self):
+        plan = {
+            "mac": MAC, "current_hid": OLD_HID, "target_hid": TARGET_HID,
+            "image": "/private/vendor.bin", "sha256": "a" * 64, "url": LOCAL_URL,
+            "local_only": False,
+        }
+        with self.assertRaises(cloud.Blocked):
+            cloud._dispatch_plan({**plan, "target_hid": OLD_HID})
+        with self.assertRaises(cloud.Blocked):
+            cloud._dispatch_plan({**plan, "target_hid": "362001067541+U-WB05WR11V2.04.bin"})
 
     def test_duplicate_cloud_names_are_not_duplicate_identity_and_conflicts_block(self):
         self.assertEqual(cloud.module_record([info(), info(name="Other home")], MAC).mac, MAC)
@@ -176,8 +200,46 @@ class PlanTests(unittest.TestCase):
             cloud.module_record([info(), info(key="fedcba9876543210")], MAC)
 
 
-class InstallationTests(unittest.IsolatedAsyncioTestCase):
-    def module(self, hids=(OLD_HID, OLD_HID)):
+class CloudLoginTests(unittest.IsolatedAsyncioTestCase):
+    async def test_login_disables_proxy_inherits_tls_exception_and_closes_after_failure(self):
+        session = SimpleNamespace(closed=False, close=AsyncMock())
+
+        async def close_session():
+            session.closed = True
+
+        session.close.side_effect = close_session
+        api = MagicMock()
+        api.close = AsyncMock()
+        api.login = AsyncMock()
+        api.__aenter__.return_value = api
+        api.__aexit__.return_value = None
+        with (
+            patch.object(cloud.GreeCloudApi, "for_server", return_value=api),
+            patch.object(cloud.aiohttp, "ClientSession", return_value=session) as make_session,
+        ):
+            with self.assertRaisesRegex(RuntimeError, "body"):
+                async with cloud.login("Europe", "account", "secret"):
+                    raise RuntimeError("body")
+        options = make_session.call_args.kwargs
+        self.assertFalse(options["trust_env"])
+        self.assertFalse(options["connector"]._ssl.check_hostname)
+        self.assertEqual(options["connector"]._ssl.verify_mode, cloud.ssl.CERT_NONE)
+        self.assertIn(cloud.refuse_cloud_redirect, options["trace_configs"][0].on_request_redirect)
+        api.login.assert_awaited_once_with()
+        self.assertTrue(session.closed)
+        with self.assertRaises(cloud.Blocked):
+            await cloud.refuse_cloud_redirect(None, None, None)
+
+
+class CloudDispatchTests(unittest.IsolatedAsyncioTestCase):
+    def plan(self, **changes):
+        return {
+            "mac": MAC, "current_hid": LOCAL_CURRENT_HID, "target_hid": None,
+            "image": LOCAL_IMAGE, "sha256": "a" * 64, "url": LOCAL_URL,
+            "local_only": True, **changes,
+        }
+
+    def module(self, hids=(LOCAL_CURRENT_HID,)):
         module = MagicMock()
         module.__aenter__.return_value = module
         module.transport = "mqtt"
@@ -185,62 +247,101 @@ class InstallationTests(unittest.IsolatedAsyncioTestCase):
         module.upgrade = AsyncMock(return_value={"t": "ret", "r": 200})
         return module
 
-    async def attempt(self, directory, module, approval=None):
-        plan = {"mac": MAC, "current_hid": OLD_HID, "target_hid": TARGET_HID,
-                "image": "/private/original.bin", "sha256": "a" * 64, "source_url": URL, "url": URL}
-        args = SimpleNamespace(region="Europe", allow_lan_url=False)
-        ledger = cloud.ledger_path(directory, MAC)
-        phrase = f"FLASH {MAC} {'a' * 64}" if approval is None else approval
+    async def attempt(self, directory, module, plan=None):
         with (
             patch.object(cloud, "account_devices", AsyncMock(return_value=[info()])),
             patch.object(cloud, "CloudModule", return_value=module),
-            patch("builtins.input", return_value=phrase),
-            contextlib.redirect_stdout(io.StringIO()),
-            contextlib.redirect_stderr(io.StringIO()),
+            patch.object(cloud, "preflight", return_value={"sha256": "a" * 64}) as check_image,
+            patch("builtins.input") as prompt,
         ):
-            return await cloud.install(SimpleNamespace(), args, plan, ledger)
+            result = await cloud.dispatch(
+                SimpleNamespace(), "Europe", plan or self.plan(), directory
+            )
+        prompt.assert_not_called()
+        if result["outcome"] != "install_unconfirmed":
+            check_image.assert_called_once_with(LOCAL_URL, LOCAL_IMAGE, "a" * 64, allow_lan=True)
+        return result
 
-    async def test_approval_and_fresh_identity_gate_every_dispatch(self):
-        for module, approval in (
-            (self.module(), "no"),
-            (self.module(hids=(TARGET_HID,)), None),
-            (self.module(hids=(OLD_HID, TARGET_HID)), None),
-        ):
+    async def test_identity_mismatch_blocks_without_ledger_or_send(self):
+        for hid in (TARGET_HID, "not-a-full-hid"):
             with tempfile.TemporaryDirectory() as directory:
+                module = self.module(hids=(hid,))
                 with self.assertRaises(cloud.Blocked):
-                    await self.attempt(directory, module, approval)
+                    await self.attempt(directory, module)
                 module.upgrade.assert_not_called()
                 self.assertEqual(list(Path(directory).iterdir()), [])
 
-    async def test_uncertain_send_is_durably_recorded_and_cannot_be_replayed(self):
+    async def test_local_only_same_hid_dispatches_after_selection(self):
+        with tempfile.TemporaryDirectory() as directory:
+            module = self.module()
+            plan = self.plan(target_hid=LOCAL_CURRENT_HID)
+            result = await self.attempt(directory, module, plan)
+        self.assertEqual(result["outcome"], "install_requested")
+        module.upgrade.assert_awaited_once_with(LOCAL_URL)
+
+    async def test_durable_ledger_is_fsynced_before_one_send_and_prevents_replay(self):
+        with tempfile.TemporaryDirectory() as directory:
+            module = self.module()
+            ledger = Path(directory) / f"install-{MAC}.json"
+            original_fsync = cloud.os.fsync
+
+            async def send(url):
+                record = json.loads(ledger.read_text())
+                self.assertEqual((record["mac"], record["url"], record["outcome"]), (MAC, LOCAL_URL, "install_requested"))
+                self.assertTrue(record["local_only"])
+                self.assertIsNone(record["target_hid"])
+                self.assertNotIn("source_url", record)
+                self.assertFalse(record["cloud_tls_verified"])
+                fsync.assert_called_once()
+                if sys.platform != "win32":
+                    self.assertEqual(ledger.stat().st_mode & 0o777, 0o600)
+                return {"r": 200}
+
+            module.upgrade.side_effect = send
+            with patch.object(cloud.os, "fsync", wraps=original_fsync) as fsync:
+                result = await self.attempt(directory, module)
+            self.assertEqual(result["outcome"], "install_requested")
+            module.fresh_hid.assert_awaited_once_with()
+            module.upgrade.assert_awaited_once_with(LOCAL_URL)
+            with self.assertRaises(cloud.Blocked):
+                await self.attempt(directory, module)
+            module.upgrade.assert_awaited_once_with(LOCAL_URL)
+
+    async def test_uncertain_send_stays_durable_and_is_not_replayed(self):
         with tempfile.TemporaryDirectory() as directory:
             module = self.module()
             ledger = Path(directory) / f"install-{MAC}.json"
 
             async def uncertain_send(url):
                 record = json.loads(ledger.read_text())
-                self.assertEqual((record["mac"], record["url"], record["outcome"]), (MAC, URL, "install_requested"))
-                self.assertFalse(record["cloud_tls_verified"])
-                if sys.platform != "win32":
-                    self.assertEqual(ledger.stat().st_mode & 0o777, 0o600)
+                self.assertEqual((record["mac"], record["url"], record["outcome"]), (MAC, LOCAL_URL, "install_requested"))
                 raise asyncio.TimeoutError()
 
             module.upgrade.side_effect = uncertain_send
-            self.assertEqual(await self.attempt(directory, module), 3)
-            module.upgrade.assert_awaited_once_with(URL)
+            result = await self.attempt(directory, module)
+            self.assertEqual((result["outcome"], result["error"]), ("install_unconfirmed", "TimeoutError"))
+            module.upgrade.assert_awaited_once_with(LOCAL_URL)
             with self.assertRaises(cloud.Blocked):
-                cloud.ledger_path(directory, MAC)
-            ledger.write_text("")
-            with self.assertRaises(cloud.Blocked):
-                cloud.ledger_path(directory, MAC)
+                await self.attempt(directory, module)
+            module.upgrade.assert_awaited_once_with(LOCAL_URL)
+
+
+    async def test_device_rejection_is_reported_without_retry(self):
+        with tempfile.TemporaryDirectory() as directory:
+            module = self.module()
+            module.upgrade.return_value = {"r": 403}
+            result = await self.attempt(directory, module)
+        self.assertEqual((result["outcome"], result["result"]), ("install_rejected", 403))
+        module.upgrade.assert_awaited_once_with(LOCAL_URL)
 
     async def test_fsync_failure_prevents_the_network_send(self):
         with tempfile.TemporaryDirectory() as directory:
             module = self.module()
             with patch.object(cloud.os, "fsync", side_effect=OSError("disk failed")):
-                with self.assertRaises(OSError):
+                with self.assertRaises(cloud.Blocked):
                     await self.attempt(directory, module)
             module.upgrade.assert_not_called()
+
 
 
 if __name__ == "__main__":

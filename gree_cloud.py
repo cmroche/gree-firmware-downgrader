@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
-"""Read Gree cloud identities or dispatch one explicitly approved OTA request."""
+"""Gree cloud inventory and single-dispatch helpers."""
 
-import argparse
 import asyncio
 import base64
-import getpass
 import json
 import logging
 import os
@@ -13,8 +11,9 @@ import secrets
 import socket
 import ssl
 import sys
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
-from ipaddress import ip_address
+from ipaddress import ip_address, ip_network
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -35,6 +34,10 @@ for _name in tuple(logging.Logger.manager.loggerDict):
         logging.getLogger(_name).disabled = True
 
 TIMEOUT = 10
+
+_RFC1918_NETWORKS = tuple(
+    ip_network(network) for network in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16")
+)
 TLS_WARNING = (
     "WARNING: Gree cloud TLS certificate/hostname validation is disabled. "
     "An active network attacker could steal cloud credentials or alter replies. "
@@ -263,40 +266,80 @@ class CloudModule:
         )
 
 
-def load_plan(path):
-    path = Path(path)
-    plan = json.loads(path.read_text())
-    fields = {"mac", "current_hid", "target_hid", "image", "sha256", "source_url", "url"}
-    if not isinstance(plan, dict) or set(plan) != fields or not all(isinstance(v, str) for v in plan.values()):
-        raise Blocked("Plan must contain exactly: " + ", ".join(sorted(fields)))
-    plan["mac"] = canonical_mac(plan["mac"])
-    if not valid_hid(plan["current_hid"]) or not valid_hid(plan["target_hid"]):
-        raise Blocked("Plan requires full current and target HIDs")
-    if plan["current_hid"].split("+", 1)[0] != plan["target_hid"].split("+", 1)[0]:
-        raise Blocked("Current and target firmware codes differ")
-    if plan["current_hid"] == plan["target_hid"]:
-        raise Blocked("Already reports the target HID; verify LAN access without reflashing")
-    if not re.fullmatch(r"[0-9a-fA-F]{64}", plan["sha256"]):
+def _dispatch_plan(plan):
+    required = {"mac", "current_hid", "target_hid", "image", "sha256", "url", "local_only"}
+    optional = {"size", "version", "provenance", "source_url"}
+    if not isinstance(plan, dict) or not required <= plan.keys() or plan.keys() - required - optional:
+        raise Blocked("Dispatch plan does not match the approved selection")
+    approved = dict(plan)
+    approved["mac"] = canonical_mac(plan["mac"])
+    current = plan["current_hid"]
+    target = plan["target_hid"]
+    local_only = plan["local_only"]
+    if not valid_hid(current) or type(local_only) is not bool:
+        raise Blocked("Dispatch plan requires a full current HID and local-only flag")
+    code = current.split("+", 1)[0]
+    if local_only:
+        if target is not None and (not valid_hid(target) or target.split("+", 1)[0] != code):
+            raise Blocked("Local-only target HID must be unknown or match the physical module")
+        if plan.get("source_url") is not None:
+            raise Blocked("Local-only firmware must not claim an official source URL")
+    else:
+        if not valid_hid(target) or target.split("+", 1)[0] != code:
+            raise Blocked("Current and target firmware codes differ")
+        if target == current:
+            raise Blocked("Already reports the target HID; no installation sent")
+    if not isinstance(plan["image"], str) or not Path(plan["image"]).is_absolute():
+        raise Blocked("Dispatch plan requires an absolute firmware image path")
+    if not isinstance(plan["sha256"], str) or not re.fullmatch(r"[0-9a-fA-F]{64}", plan["sha256"]):
         raise Blocked("Plan SHA-256 must contain 64 hexadecimal digits")
-    plan["sha256"] = plan["sha256"].lower()
-    source = urlsplit(plan["source_url"])
+    if not isinstance(plan["url"], str):
+        raise Blocked("Dispatch plan requires a firmware URL")
+    try:
+        parsed_url = urlsplit(plan["url"])
+        address = ip_address(parsed_url.hostname)
+    except (TypeError, ValueError):
+        raise Blocked("Cloud OTA URL must use an RFC1918 IPv4 address") from None
     if (
-        source.scheme not in ("http", "https")
-        or not source.hostname
-        or not (source.hostname == "gree.com" or source.hostname.endswith(".gree.com"))
-        or source.username is not None
-        or source.password is not None
-        or source.port is not None
-        or source.fragment
-        or any(c.isspace() or ord(c) < 32 for c in plan["source_url"])
+        parsed_url.scheme != "http"
+        or address.version != 4
+        or not any(address in network for network in _RFC1918_NETWORKS)
     ):
-        raise Blocked("Original source URL must be an official Gree HTTP(S) URL")
-    image = Path(plan["image"])
-    plan["image"] = str((path.parent / image).resolve() if not image.is_absolute() else image.resolve())
-    return plan
+        raise Blocked("Cloud OTA URL must use an RFC1918 IPv4 HTTP address")
+    approved["sha256"] = plan["sha256"].lower()
+    if "size" in plan and (type(plan["size"]) is not int or plan["size"] < 0):
+        raise Blocked("Dispatch plan size must be a non-negative integer")
+    for field in ("version", "provenance"):
+        if field in plan and not isinstance(plan[field], str):
+            raise Blocked(f"Dispatch plan {field} must be text")
+    if "source_url" in plan:
+        source_url = plan["source_url"]
+        if source_url is not None:
+            try:
+                source = urlsplit(source_url)
+                source_port = source.port
+            except (TypeError, ValueError):
+                source = None
+                source_port = None
+            if (
+                source is None
+                or not isinstance(source_url, str)
+                or source.scheme not in ("http", "https")
+                or not source.hostname
+                or not (source.hostname == "gree.com" or source.hostname.endswith(".gree.com"))
+                or source.username is not None
+                or source.password is not None
+                or source_port is not None
+                or source.fragment
+                or source.query
+                or any(c.isspace() or ord(c) < 32 for c in source_url)
+            ):
+                raise Blocked("Original source URL must be an official Gree HTTP(S) URL")
+    return approved
 
 
 def ledger_path(run_dir, mac):
+    mac = canonical_mac(mac)
     run_dir = Path(run_dir)
     run_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
     if os.name != "nt" and run_dir.stat().st_mode & 0o077:
@@ -326,107 +369,139 @@ def record_dispatch(path, plan, transport):
 async def inventory(api, region):
     rows, seen = [], set()
     records = await account_devices(api)
-    for info in records:
-        row = {"mac": info.mac, "name": info.name, "protocol": info.version}
+    for record in records:
+        raw_mac = record.mac if isinstance(record.mac, str) else None
+        row = {
+            "mac": raw_mac,
+            "name": record.name if isinstance(record.name, str) else None,
+            "protocol": record.version if isinstance(record.version, str) else None,
+        }
         try:
-            mac = canonical_mac(info.mac)
-            if mac in seen:
-                continue
-            seen.add(mac)
+            mac = canonical_mac(record.mac)
+        except Blocked as error:
+            row.update(status="blocked_identity", reason=str(error))
+            rows.append(row)
+            continue
+        if mac in seen:
+            continue
+        seen.add(mac)
+        row["mac"] = mac
+        try:
             info = module_record(records, mac)
-            async with CloudModule(api, region, info) as module:
-                row.update(mac=module.mac, transport=module.transport, hid=await module.fresh_hid(), status="identified")
+            module = CloudModule(api, region, info)
         except Blocked as error:
             row.update(status="blocked_identity", reason=str(error))
         except Exception as error:
             row.update(status="blocked_cloud", error=type(error).__name__)
+        else:
+            try:
+                async with module:
+                    row.update(
+                        transport=module.transport,
+                        hid=await module.fresh_hid(),
+                        status="identified",
+                    )
+            except Blocked as error:
+                row.update(status="blocked_unreachable", reason=str(error))
+            except Exception as error:
+                row.update(status="blocked_unreachable", error=type(error).__name__)
         rows.append(row)
-    print(json.dumps(rows, indent=2))
+    return rows
 
 
-async def install(api, args, plan, ledger):
-    records = await account_devices(api)
-    info = module_record(records, plan["mac"])
-    async with CloudModule(api, args.region, info) as module:
-        if await module.fresh_hid() != plan["current_hid"]:
-            raise Blocked("Current cloud HID differs from the plan; no installation sent")
-        print(json.dumps({**plan, "transport": module.transport, "allow_lan_url": args.allow_lan_url}, indent=2))
-        print("Flashing can brick the module or lose pairing/settings and cloud/local access.")
-        phrase = f"FLASH {plan['mac']} {plan['sha256']}"
-        if input(f"Stable power and recovery ready? Type {phrase}: ") != phrase:
-            raise Blocked("Installation not approved; no upgrade sent")
-        if await module.fresh_hid() != plan["current_hid"]:
-            raise Blocked("Firmware changed after approval; no installation sent")
-        record_dispatch(ledger, plan, module.transport)
-        try:
-            reply = await module.upgrade(plan["url"])
-            outcome = "install_requested" if reply.get("r") == 200 else "install_rejected"
-            print(json.dumps({"outcome": outcome, "device_result": reply.get("r"), "ledger": str(ledger)}))
-        except Exception as error:
-            print(json.dumps({"outcome": "install_unconfirmed", "error": type(error).__name__, "ledger": str(ledger)}))
-            return 3
-        finally:
-            print("Do not resend. Perform fresh same-MAC target-HID and LAN-status verification.", file=sys.stderr)
-        return 0 if outcome == "install_requested" else 3
+async def dispatch(api, region, plan, run_dir):
+    approved = _dispatch_plan(plan)
+    try:
+        ledger = ledger_path(run_dir, approved["mac"])
+    except (Blocked, FirmwareError):
+        raise
+    except Exception as error:
+        raise Blocked(f"Could not prepare the private installation ledger ({type(error).__name__})") from None
+
+    recorded = False
+    transport = None
+    try:
+        await asyncio.to_thread(
+            preflight, approved["url"], approved["image"], approved["sha256"], allow_lan=True
+        )
+        records = await account_devices(api)
+        info = module_record(records, approved["mac"])
+        async with CloudModule(api, region, info) as module:
+            if await module.fresh_hid() != approved["current_hid"]:
+                raise Blocked("Current cloud HID differs from the approved selection; no installation sent")
+            transport = module.transport
+            record_dispatch(ledger, approved, transport)
+            recorded = True
+            try:
+                reply = await module.upgrade(approved["url"])
+            except Exception as error:
+                return {
+                    "outcome": "install_unconfirmed",
+                    "ledger": str(ledger),
+                    "transport": transport,
+                    "error": type(error).__name__,
+                }
+            result = reply.get("r") if isinstance(reply, dict) else None
+            result_code = result if type(result) is int else None
+            return {
+                "outcome": "install_requested" if result_code == 200 else "install_rejected",
+                "ledger": str(ledger),
+                "transport": transport,
+                "result": result_code,
+            }
+    except (Blocked, FirmwareError) as error:
+        if recorded:
+            return {
+                "outcome": "install_unconfirmed",
+                "ledger": str(ledger),
+                "transport": transport,
+                "error": type(error).__name__,
+            }
+        raise
+    except Exception as error:
+        if recorded:
+            return {
+                "outcome": "install_unconfirmed",
+                "ledger": str(ledger),
+                "transport": transport,
+                "error": type(error).__name__,
+            }
+        raise Blocked(
+            f"Cloud dispatch preflight failed ({type(error).__name__}); no installation sent"
+        ) from None
 
 
 async def refuse_cloud_redirect(_session, _context, _params):
     raise Blocked("Cloud API redirect refused; credentials were not forwarded")
 
 
-async def run(args):
-    plan = ledger = None
-    if args.command == "install":
-        plan = load_plan(args.plan)
-        ledger = ledger_path(args.run_dir, plan["mac"])
-        await asyncio.to_thread(preflight, plan["url"], plan["image"], plan["sha256"], allow_lan=args.allow_lan_url)
-    username = os.environ.get("GREE_USERNAME") or input("Gree+ username: ")
-    password = os.environ.get("GREE_PASSWORD") or getpass.getpass("Gree+ password: ")
-    if not username or not password:
+@asynccontextmanager
+async def login(region, username, password):
+    if region not in GREE_CLOUD_SERVERS:
+        raise Blocked("Unknown Gree cloud region")
+    if not isinstance(username, str) or not username or not isinstance(password, str) or not password:
         raise Blocked("Gree+ username and password are required")
-    print(TLS_WARNING, file=sys.stderr)
-    api = GreeCloudApi.for_server(args.region, username, password)
-    # Pinned SDK has no session injection; replace only this client's REST session.
-    await api.close()
-    trace = aiohttp.TraceConfig()
-    trace.on_request_redirect.append(refuse_cloud_redirect)
-    api._session = aiohttp.ClientSession(
-        connector=aiohttp.TCPConnector(ssl=cloud_tls()),
-        timeout=aiohttp.ClientTimeout(total=30, connect=10),
-        trust_env=False,
-        trace_configs=[trace],
-    )
-    async with api:
-        await api.login()
-        if args.command == "inventory":
-            await inventory(api, args.region)
-            return 0
-        return await install(api, args, plan, ledger)
-
-
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    commands = parser.add_subparsers(dest="command", required=True)
-    for name in ("inventory", "install"):
-        command = commands.add_parser(name)
-        command.add_argument("--region", required=True, choices=sorted(GREE_CLOUD_SERVERS))
-        if name == "install":
-            command.add_argument("--plan", required=True, type=Path)
-            command.add_argument("--run-dir", required=True, type=Path)
-            command.add_argument("--allow-lan-url", action="store_true", help="Allow an explicitly approved RFC1918 IPv4 image URL")
-    args = parser.parse_args()
-    logging.disable(logging.CRITICAL)
+    api = GreeCloudApi.for_server(region, username, password)
+    session = None
     try:
-        return asyncio.run(run(args))
-    except (Blocked, FirmwareError) as error:
-        print(str(error), file=sys.stderr)
-    except (KeyboardInterrupt, EOFError):
-        print("Interrupted. If an installation ledger exists, dispatch is uncertain: verify, do not resend.", file=sys.stderr)
-    except Exception as error:
-        # SDK exceptions may contain decrypted authentication responses.
-        print(f"Operation failed ({type(error).__name__}); credentials and response bodies suppressed. If a ledger exists, verify before any further attempt.", file=sys.stderr)
-    return 2
-
-
-if __name__ == "__main__":
-    sys.exit(main())
+        # The SDK's default session trusts environment proxies and redirects.
+        await api.close()
+        trace = aiohttp.TraceConfig()
+        trace.on_request_redirect.append(refuse_cloud_redirect)
+        session = aiohttp.ClientSession(
+            connector=aiohttp.TCPConnector(ssl=cloud_tls()),
+            timeout=aiohttp.ClientTimeout(total=30, connect=10),
+            trust_env=False,
+            trace_configs=[trace],
+        )
+        api._session = session
+        async with api:
+            await api.login()
+            yield api
+    finally:
+        if session is not None and not session.closed:
+            try:
+                await api.close()
+            finally:
+                if not session.closed:
+                    await session.close()

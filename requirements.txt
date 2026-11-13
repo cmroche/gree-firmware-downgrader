@@ -1,0 +1,2 @@
+greeclimate==4.2.5
+greeclimate-davo22==2.7.5

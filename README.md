@@ -1,41 +1,37 @@
 # Gree Firmware Downgrader
 
-An assistant skill for restoring local control of [supported Gree Wi-Fi devices](skills/gree-firmware-downgrader/references/firmware-versions.md) using bundled, verified LAN-capable firmware.
+Interactive Python tool for restoring local control with bundled firmware. Discovers physical Gree modules and lets you select compatible vendor or local-only firmware separately for every device.
 
-## Install
+## Install and run
 
-**Claude Code**
-
-```sh
-claude plugin marketplace add cmroche/gree-firmware-downgrader
-claude plugin install gree-firmware-downgrader@gree-firmware-downgrader
-```
-
-**Codex CLI**
+Requires Python 3.11+ and access to the devices' LAN.
 
 ```sh
-codex plugin marketplace add cmroche/gree-firmware-downgrader
-codex plugin add gree-firmware-downgrader@gree-firmware-downgrader
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python downgrade.py
 ```
 
-Start a new session after installing. Requires Python 3.10+ and access to the device's local network.
+To include cloud-only devices, specify your Gree+ account's region:
 
-## Use
-
-Claude Code:
-
-```text
-/gree-firmware-downgrader:gree-firmware-downgrader Find my devices and show the downgrade plan.
+```sh
+.venv/bin/python downgrade.py --region Europe
 ```
 
-Codex:
+The tool prompts privately for cloud credentials, or reads `GREE_USERNAME` and `GREE_PASSWORD`. Cloud access has an explicit certificate-validation warning; do not use it on an untrusted network.
 
-```text
-$gree-firmware-downgrader Find my devices and show the downgrade plan.
-```
+## Firmware selection
 
-For cloud access, provide your Gree+ account region and a private credential location when asked. Never paste credentials into chat.
+- Each identified device offers **keep current** and all compatible bundled images. Matching uses firmware code/module, not numeric version ordering.
+- Local-only images are `firmware/*-local-only.bin`; they need no separate catalog or additional approval.
+- All choices are collected before updates start. Selecting an image authorizes one update for that device. Unsupported and blocked devices remain visible.
+- Images are served unchanged from distinct SHA-256 URLs on LAN port 80. The tool never downloads firmware or retries an OTA automatically.
 
-Flashing can brick a device or lose pairing, settings and cloud access. Review the plan and explicitly approve each device before flashing.
+Use `--bind <this-computer's-LAN-IPv4>` if automatic interface selection is unsuitable. Port 80 must be available and reachable from the devices. If your OS requires administrator privileges, use an elevated terminal; the tool does not escalate privileges or change firewall/routing settings.
+
+Updates run one device at a time, with fresh identity checks and post-update LAN observations. An unresolved update stops subsequent installations and keeps hosting available until Ctrl-C. Private operation records are under `${XDG_STATE_HOME:-~/.local/state}/gree-firmware-downgrader/`.
+
+Flashing can brick a module or lose pairing/settings. Keep power stable. LAN availability and an unchanged HID cannot prove the installed bytes of a local-only image; the tool does not claim flash readback or physical HVAC verification.
 
 Project code: [GPL-3.0](LICENSE). Vendor firmware redistribution rights remain unverified.
+
