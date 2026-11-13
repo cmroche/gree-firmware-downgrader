@@ -1,10 +1,10 @@
-# Acquire exact original Gree firmware
+# Firmware acquisition for explicitly approved bundle refresh or recovery
 
-Adapted from [greeclimate's firmware-download skill](https://github.com/cmroche/greeclimate/blob/91e08befc9209cff53be4c3a98a1a7047802afe1/.agents/skills/gree-firmware-download/SKILL.md), copyright Clifford Roche, GPL-3.0. This reference covers firmware metadata and image acquisition only. Keep TLS certificate and hostname verification enabled for every acquisition request. The cloud guide's accepted TLS-validation exception for Gree cloud REST/MQTT/gateway connections does not apply here.
+This reference applies only when the user explicitly approves acquiring or replacing a specific bundled original for refresh or recovery. Normal runs use the exact bundled original; a missing, corrupt or mismatched bundle never triggers a download or version swap. This reference does not authorize flashing. Adapted from [greeclimate's firmware-download skill](https://github.com/cmroche/greeclimate/blob/91e08befc9209cff53be4c3a98a1a7047802afe1/.agents/skills/gree-firmware-download/SKILL.md), copyright Clifford Roche, GPL-3.0. Keep TLS certificate and hostname verification enabled for every acquisition request. The cloud guide's accepted TLS-validation exception for Gree cloud REST/MQTT/gateway connections does not apply here.
 
 The parent skill's explicitly approved LAN image host is a device-facing firmware URL, not an acquisition source. It does not permit private/LAN URLs for metadata or image acquisition and does not relax the checks below.
 
-## Identify the exact target
+## Identify the exact target for an approved refresh or recovery
 
 - Take the firmware code and full target HID from the bundled version reference and original build evidence. Preserve the literal code, module/variant, version and regional association. A HID prefix is a lookup candidate, not proof of an OTA alias; a MID or retail model is not a firmware code.
 - The newest advertised firmware is not necessarily LAN-capable. Select only the explicit verified LAN build; matching a numeric version does not resolve distinct builds sharing that label.
@@ -46,9 +46,9 @@ Read the body, not just HTTP status:
 - App `r:405`, `msg:"Firmware not found."`: no candidate advertised by this host at this time; historical availability remains unknown.
 - HTTP 404/405, DNS/TLS failure, timeout, non-JSON or other errors: lookup failed, availability unknown. Do not label it absent.
 
-An older LAN build may still be latest in another region. If no latest response matches, inspect the [firmware archive](https://github.com/maxim-smirnov/gree-wifimodule-firmware), its matching `.md` sidecars/history, and the version reference's linked evidence to recover an original official Gree image URL. Image IDs are host-specific: never transplant IDs between regions or invent `version=` parameters. Use archive metadata to locate Gree's original; do not silently switch the binary to a mirror. If Gree no longer serves the exact verified build, return `blocked_download` with the checked sources.
+An older LAN build may still be latest in another region. If no latest response matches, inspect the [firmware archive](https://github.com/maxim-smirnov/gree-wifimodule-firmware), its matching `.md` sidecars/history, and the version reference's linked evidence to recover the exact original official Gree image URL. Image IDs are host-specific: never transplant IDs between regions or invent `version=` parameters. Use archive metadata to locate Gree's original; do not install a mirror payload. If Gree no longer serves the exact verified build, report `blocked_download` with the checked sources; another origin requires explicit scope approval.
 
-## Download and verify before installation
+## Download only for an explicitly approved refresh or recovery
 
 After inspecting and validating a candidate URL, download one hop into a fresh private attempt directory. Use HTTP tooling with explicit connect and total timeouts; save response headers and incomplete bytes separately. A failed/interrupted `.part` file is not verified firmware. Try a verified-HTTPS counterpart of an advertised HTTP URL first; record both advertised and effective URLs and any HTTP fallback.
 
@@ -60,6 +60,6 @@ Before promoting the file:
 4. Establish the selected code/module/region/version and expected full HID from original provenance and embedded identity where available. Resolve conflicts or duplicate-label builds before installation; do not relabel another payload.
 5. Preserve the original immutable bytes plus raw metadata, final headers, source/effective URL, source filename as evidence only, size, SHA-256 and verification result. Use locally chosen safe basenames, not a server-controlled filename. Never overwrite a prior original blindly.
 
-For each selected device/target, finish with a verified local original or a named blocker. Querying all regions does not require downloading unrelated cloud-only/newer releases. Identical verified hashes may share one local file, but retain every selected device's provenance association.
+For each explicitly approved refresh/recovery target, finish with a verified local original or a named blocker. Querying all regions does not require downloading unrelated cloud-only/newer releases. Identical verified hashes may share one local file, but retain every selected device's provenance association.
 
-Host-side download success does not prove the HVAC can reach the URL. Return the verified original, expected full HID, hash and source URL to the parent skill's device-URL, approval, installation and fresh-verification steps.
+After approved acquisition, return the verified original, exact target HID, hash, actual acquisition URL and separate provenance reference to the parent skill's bundle-integrity, URL, approval, installation and fresh-verification steps. Normal runs never reach this acquisition workflow.

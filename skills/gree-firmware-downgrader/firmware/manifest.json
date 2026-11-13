@@ -1,0 +1,64 @@
+{
+  "images": [
+    {
+      "firmware_code": "362001066300",
+      "module": "4MWB05DF13",
+      "version": "3.05",
+      "image": "362001066300-v3.05.bin",
+      "size": 1228832,
+      "sha256": "841d662cd86bb6f39b5ac10990a6333ecaf9c96afbd6747f0159d2ae2ea07ae9",
+      "target_hid": "362001066300+U-4MWB05DF13V3.05.bin",
+      "source_url": "http://test.grih.gree.com/wifiModule/image/19087/1228832",
+      "provenance_url": "https://raw.githubusercontent.com/maxim-smirnov/gree-wifimodule-firmware/main/downloaded_362001060000_362001069999/362001066300_v3.05_test.grih.gree.com.md",
+      "notes": "Unmodified archived original; source_url is the original Gree image URL preserved in the archived metadata. Target HID is established by native constructor/emitter evidence for this SHA-256."
+    },
+    {
+      "firmware_code": "362001067540",
+      "module": "WB05WR13",
+      "version": "2.06",
+      "image": "362001067540-v2.06.bin",
+      "size": 1032224,
+      "sha256": "5f14dd184941feebe5e7fc2d53e3d7d48eb452ec8a5e5da1fbc7cb430ffc0cfd",
+      "target_hid": "362001067540+U-WB05WR13V2.06.bin",
+      "source_url": "http://test.grih.gree.com/wifiModule/image/18678/1032224",
+      "provenance_url": "https://raw.githubusercontent.com/maxim-smirnov/gree-wifimodule-firmware/main/downloaded_362001060000_362001069999/362001067540_v2.06_test.grih.gree.com.md",
+      "notes": "Unmodified archived original. This verified LAN build is numerically higher than the observed cloud-only V2.04. Target HID is established by native constructor/emitter evidence for this SHA-256."
+    },
+    {
+      "firmware_code": "362001067541",
+      "module": "WB05WR11",
+      "version": "2.04",
+      "image": "362001067541-v2.04.bin",
+      "size": 1015840,
+      "sha256": "e8068e5388facaee3820f8d9d893b8c4e7fca2da86d2ee3e8f74e75f766e7892",
+      "target_hid": "362001067541+U-WB05WR11V2.04.bin",
+      "source_url": "http://test.grih.gree.com/wifiModule/image/19220/1015840",
+      "provenance_url": "https://raw.githubusercontent.com/maxim-smirnov/gree-wifimodule-firmware/main/downloaded_362001060000_362001069999/362001067541_v2.04_test.grih.gree.com.md",
+      "notes": "Unmodified Gree original. Target HID is established by native constructor/emitter evidence for this SHA-256; the image URL and SHA-256 also appear in home-assistant/core issue #176486."
+    },
+    {
+      "firmware_code": "362001068254",
+      "module": "4MWB65VR",
+      "version": "2.11",
+      "image": "362001068254-v2.11.bin",
+      "size": 1036320,
+      "sha256": "40f85264c8f450acd9e329a25fb9731b89940aa20cc38bd085c764495b5edf27",
+      "target_hid": "362001068254+U-4MWB65VRV2.11.bin",
+      "source_url": "http://test.grih.gree.com/wifiModule/image/19180/1036320",
+      "provenance_url": "https://github.com/home-assistant/core/issues/176486",
+      "notes": "Unmodified Gree original; the image URL and matching SHA-256 are recorded in the device report."
+    },
+    {
+      "firmware_code": "362001068295",
+      "module": "4MWB05UR",
+      "version": "2.02",
+      "image": "362001068295-v2.02.bin",
+      "size": 1028128,
+      "sha256": "df7fca27f42b64df67a1fcf99e1683a14a3ff438008966c4839f6683ee38a35d",
+      "target_hid": null,
+      "source_url": "http://test.grih.gree.com/wifiModule/image/18935/1028128",
+      "provenance_url": "https://raw.githubusercontent.com/maxim-smirnov/gree-wifimodule-firmware/main/downloaded_362001060000_362001069999/362001068295_v2.02_test.grih.gree.com.md",
+      "notes": "Unmodified Gree original with verified LAN capability, but its full emitted target HID is not established. Do not infer it from the separate build marker or approve/send an install until exact target identity is evidenced."
+    }
+  ]
+}

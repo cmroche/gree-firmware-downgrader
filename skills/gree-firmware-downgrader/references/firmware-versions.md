@@ -4,15 +4,17 @@ Source: [`greeclimate/docs/CLOUD_ONLY_FIRMWARE.md`](https://github.com/cmroche/g
 
 The version columns show the **latest verified LAN-capable build** and **earliest observed cloud-only build**, not guaranteed transition releases. Missing intermediate builds and non-monotonic version labels prevent a universal cutoff.
 
-| MID | Firmware Code | Module Type | Firmware Versions Examined | Device Type | Last Verified LAN Version | First Observed Cloud-Only Version |
+Normal runs use the exact unchanged original selected from `firmware/manifest.json` by physical-module firmware code, module and build evidence. The manifest's `image`, `size` and `sha256` identify the bundled artifact; compare them before hosting or approval. Each bundled `source_url` is the evidenced official Gree image URL; `provenance_url` points to supporting evidence. The version table establishes target evidence, not permission to flash.
+
+| Firmware Code | Module Type | Firmware Versions Examined | Device Type | Last Verified LAN Version | First Observed Cloud-Only Version | Bundled Original |
 |---|---|---|---|---|---|---|
-| Unknown | `362001066300` | `4MWB05DF13` | `3.05`, `3.27`, `4.12` | Not established | **3.05** — native UDP/7000 bind and receive polling | **3.27** |
-| Unknown | `362001067540` | `WB05WR13` | `2.04`, `2.06` | Not established | **2.06** — native UDP/7000 bind and receive polling | **2.04** — not a monotonic cutoff |
-| Unknown | `362001067541` | `WB05WR11` | `2.04`, `2.08`, `2.09`, `2.10` | Air conditioner | **2.04** — native verification and owner-confirmed local control | **2.08** |
-| `10001` reported on `2.09`; not recovered from these binaries | `362001068254` | `4MWB65VR` | `2.11`, `2.12` | Air conditioner — Airy / Clivia reports | **2.11** — native verification and owner-confirmed local control | **2.12** |
-| Unknown | `362001068295` | `4MWB05UR` | `2.02`, `2.04` — two distinct `2.04` builds | Not established | **2.02** — native UDP/7000 bind and receive polling | **2.04** |
-| Unknown | `362001068411` | `WB05HR13` | `1.02`, `2.07`, `4.07` | Not established | **Not found** | **1.02** |
-| Unknown | `362001071519` | `4MWB65AR11` | `2.00` binary; `2.04` owner report | Air conditioner reported for `2.04`: Gree Clivia R22; `2.00` appliance unverified | **Not found** | **2.00** |
+| `362001066300` | `4MWB05DF13` | `3.05`, `3.27`, `4.12` | Not established | **3.05** — native UDP/7000 bind and receive polling | **3.27** | `362001066300-v3.05.bin` |
+| `362001067540` | `WB05WR13` | `2.04`, `2.06` | Not established | **2.06** — native UDP/7000 bind and receive polling | **2.04** — not a monotonic cutoff | `362001067540-v2.06.bin` |
+| `362001067541` | `WB05WR11` | `2.04`, `2.08`, `2.09`, `2.10` | Air conditioner | **2.04** — native verification and owner-confirmed local control | **2.08** | `362001067541-v2.04.bin` |
+| `362001068254` | `4MWB65VR` | `2.11`, `2.12` | Air conditioner — Airy / Clivia reports | **2.11** — native verification and owner-confirmed local control | **2.12** | `362001068254-v2.11.bin` |
+| `362001068295` | `4MWB05UR` | `2.02`, `2.04` — two distinct `2.04` builds | Not established | **2.02** — native UDP/7000 bind and receive polling | **2.04** | `362001068295-v2.02.bin` |
+| `362001068411` | `WB05HR13` | `1.02`, `2.07`, `4.07` | Not established | **Not found** | **1.02** | — |
+| `362001071519` | `4MWB65AR11` | `2.00` binary; `2.04` owner report | Air conditioner reported for `2.04`: Gree Clivia R22; `2.00` appliance unverified | **Not found** | **2.00** | — |
 
 ## Important qualifications
 
@@ -22,7 +24,8 @@ These are inspected-build findings, not firmware-code-wide LAN exclusions or upg
 
 ## Selection policy for this skill
 
-- Use each row's explicit **Last Verified LAN Version** as the default target, not a numeric cutoff derived from the cloud-only column. `362001067540` targets `2.06`, even though its cloud-only example is `2.04`: restoring LAN is not always a numeric downgrade.
-- `362001068411` and `362001071519` have no established LAN target. Report `blocked_no_lan_target`; do not guess an older release.
-- Match firmware code, module/variant and exact build provenance. A shared MID, similar filename or matching version number is not enough to substitute firmware. Preserve hashes when multiple builds share a label.
-- "Latest" means latest verified LAN-capable build in this evidence, not the newest release advertised by Gree. Refresh against the upstream table before a run; do not silently promote an unexamined release. For an unlisted family, require additional positive LAN-build evidence or report `blocked_no_lan_target`.
+- Match firmware code, module/variant and exact build provenance to one manifest entry. A shared MID, similar filename or matching version number is not enough to substitute firmware. Preserve hashes when multiple builds share a label.
+- Use the bundled table and manifest by default; do not refresh upstream evidence or promote an unexamined release during a normal run. If a target or evidence is missing, resolve it from positive evidence before proceeding. For an unlisted family, require positive exact-build LAN evidence or report `blocked_no_lan_target`.
+- Require the manifest's exact full `target_hid` and provenance before flashing. A null/missing full HID or unresolved provenance blocks installation; never construct an HID from a label. Specifically, the `362001068295` UR 2.02 manifest entry has `target_hid: null`: do not approve or send its image until positive evidence establishes the exact emitted HID. Bundle inclusion is not flash approval or proof a physical downgrade works.
+
+The bundled images are vendor firmware. Their licensing is separate from the repository's GPL-3.0 license; redistribution rights are not asserted.

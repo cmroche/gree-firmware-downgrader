@@ -1,14 +1,15 @@
 ---
 name: gree-firmware-downgrader
 description: >
-  Discover Gree Wi-Fi devices through cloud and LAN inventory, select each
-  device's latest verified LAN-capable firmware, acquire the exact original
-  from Gree, and restore LAN access with an approved cloud OTA or optional
-  direct LAN upgrade. Verify fresh same-device HID and local status replies.
+  Discover Gree Wi-Fi devices, select an exact bundled LAN-capable original
+  using physical-module and build evidence, verify its manifest size and hash,
+  serve the approved image on the LAN, and request an approved cloud OTA or
+  optional direct LAN upgrade. Verify fresh same-device HID and local status.
+---
 
 # Gree firmware downgrader
 
-Restore local access with the newest **verified LAN-capable build**, which is not necessarily numerically older. Use Gree cloud inventory as the primary source for cloud-only devices and LAN discovery as a supplement. Keep blocked and skipped devices visible.
+Restore local access with an exact bundled **verified LAN-capable build**, which is not necessarily numerically older. Use Gree cloud inventory as the primary source for cloud-only devices and LAN discovery as a supplement. Keep blocked and skipped devices visible. Normal runs do not look up or download firmware.
 
 The optional direct-LAN upgrade assumes devices share the scan/bind/status/URL-based `upgrade` workflow. This is not cross-device validation. Cloud OTA uses the separate documented client protocol. Neither route assumes identical CPUs, image formats, flash sizes or interchangeable firmware. Never apply CS532AE's image wrapper or payload-size limit to another family, and never repackage an original image.
 
@@ -16,9 +17,16 @@ The optional direct-LAN upgrade assumes devices share the scan/bind/status/URL-b
 
 Resolve bundled references relative to this `SKILL.md`, not the user's current directory. No sibling repository checkout is required. Read:
 
-- [Firmware-version reference](references/firmware-versions.md), then compare its linked public upstream cloud-only table, HIDs and MIDs. Preserve the snapshot date and record which revision/evidence selected the targets; do not edit the installed plugin cache.
-- [Cloud inventory and OTA guide](references/cloud-access.md) for account-region inventory, cloud authentication/TLS scope, explicit one-device approval, image hosting and post-OTA LAN verification.
-- [Firmware acquisition reference](references/firmware-download.md) for regional lookup, historical provenance, verified TLS, URL safety, checksums and throttling. Acquisition sends no device upgrade packets; installation is this skill's separate, explicitly authorized phase.
+- [Firmware-version reference](references/firmware-versions.md) and its `firmware/manifest.json` identify supported targets and exact bundled originals. Match physical-module firmware code, module and build evidence; no sibling research checkout is required to use the bundle.
+- [Cloud inventory and OTA guide](references/cloud-access.md) for account-region inventory, cloud authentication/TLS scope, explicit one-device approval, bundled-image hosting and post-OTA LAN verification.
+- [Firmware acquisition reference](references/firmware-download.md) only for an explicitly approved bundle refresh or recovery; it is not part of normal runs.
+
+Before any cloud login, reuse account details only if the user has already explicitly provided or authorized them; otherwise ask:
+
+- Which account region is selected in Gree+? Do not guess from location, firmware download hosts or the guide's example region, or try credentials across multiple regions.
+- Where should credentials be read from: a private local file/path, configured `GREE_USERNAME`/`GREE_PASSWORD`, or terminal prompts operated directly by the user?
+
+**Tell the user not to paste credentials, passwords, tokens or device keys into chat or forms; ask only for the region and credential location.** Follow the cloud guide's private-loading instructions. Never display credential file contents or environment values in tool output.
 
 ```sh
 umask 077
@@ -29,13 +37,13 @@ python3 -m venv "$run/venv"
 "$run/venv/bin/python" -m pip install 'greeclimate==4.2.5' 'greeclimate-davo22==2.7.5'
 ```
 
-Run private scripts with that environment's Python. Keep device inventory, attempted downloads, original metadata/headers, image hashes, approval, send timestamps and verification observations in the private run directory, never in the plugin or a public repository. Never store credentials or raw encrypted/decrypted packets; disable `greeclimate` and every loaded child logger before LAN binding.
+Run private scripts with that environment's Python. Keep device inventory, image hashes, approvals, send timestamps and verification observations in the private run directory, never in the plugin or a public repository. Preserve download attempts and original metadata/headers there only for an explicitly approved bundle refresh or recovery. Never store credentials or raw encrypted/decrypted packets; disable `greeclimate` and every loaded child logger before LAN binding.
 
-**Creating or reading this skill is not authorization to flash.** Discovery and read-only firmware queries may prepare a plan. For direct LAN upgrade, show the per-device canonical MAC, IP, current full HID, proposed full HID, original Gree URL, SHA-256 and HTTP/region limitations. For cloud OTA, follow the exact terminal approval challenge in the cloud guide; previous conversational consent is not a substitute. Explain possible bricking, lost pairing/settings and loss of cloud/local access. Do not alter HVAC controls, Wi-Fi settings, calibration or power automatically. Require stable power and an uninterrupted maintenance window.
+**Creating or reading this skill is not authorization to flash.** Discovery and read-only inventory may prepare a plan. For either install route, show the per-device canonical MAC, IP, current full HID, positively evidenced target full HID, bundled image path and SHA-256, original `source_url` provenance when known, device-facing `url`, and HTTP/region limitations. For cloud OTA, follow the exact terminal approval challenge in the cloud guide; previous conversational consent is not a substitute. Explain possible bricking, lost pairing/settings and loss of cloud/local access. Do not alter HVAC controls, Wi-Fi settings, calibration or power automatically. Require stable power and an uninterrupted maintenance window.
 
 ## 2. Discover and identify devices
 
-Start with `gree_cloud.py inventory --region '<account region>'` as documented in [Cloud inventory and OTA](references/cloud-access.md). Use the account's actual region; the output keeps physical modules, blocked logical children and failures. It can identify devices with no LAN response. Then use the existing client below as an optional LAN supplement or for direct-LAN upgrade; do not build a new UDP discovery implementation.
+After establishing the region and credential source, start with `gree_cloud.py inventory --region '<account region>'` as documented in [Cloud inventory and OTA](references/cloud-access.md). The output keeps physical modules, blocked logical children and failures. It can identify devices with no LAN response. Then use the existing client below as an optional LAN supplement or for direct-LAN upgrade; do not build a new UDP discovery implementation.
 
 ```python
 import asyncio
@@ -104,38 +112,45 @@ for name in ("greeclimate", *tuple(logging.Logger.manager.loggerDict)):
 4. Extract the literal code before `+` and the module/version from the full HID. Keep discovery `ver`, HID version and API `ver` separate. Do not infer firmware from MID, retail name or IP.
 5. A cloud-only module may not answer scan, bind or status. Keep it in the cloud inventory and use the documented cloud OTA route only when it has an exact supported route and freshly solicited HID. Compare with authorized Home Assistant/router inventory to name missing devices, and try read-only unicast at known addresses. A silent scan does not prove absence; without an identity-verified install transport and full HID, report `blocked_unreachable`/`blocked_identity`.
 
-## 3. Select the latest verified LAN build
+## 3. Select the exact bundled LAN target
 
-For every identified device, use the reference's explicit LAN target for its exact code/module variant. Require original provenance tying the candidate build to that LAN evidence, including a known hash when available; resolve duplicate-version builds by hash/evidence, not filename. If provenance is ambiguous, record `blocked_ambiguous_build`.
+For each identified physical module, match its firmware code, module and build evidence to one exact entry in `firmware/manifest.json` and the version reference. Use only that entry's unchanged original image. Do not substitute by version label, prefix, family, MID or cloud advertisement; if evidence does not resolve one exact build, report `blocked_ambiguous_build`.
 
 - Already running the exact selected LAN build: `already_target`; verify a fresh LAN bind/status roundtrip and do not reflash.
-- LAN target absent, including the reference's two **Not found** rows: `blocked_no_lan_target`.
-- Family absent from the reference: seek positive exact-build LAN evidence in the linked upstream sources or existing authorized research. Neither "not in the cloud-only table" nor "Gree advertises it" proves LAN support. If none is established, `blocked_no_lan_target`.
-- Non-monotonic versions are intentional: code `362001067540` selects `2.06`, not an invented version below `2.04`.
-- Record the expected **full target HID** from build evidence before installation. Do not use the version number alone or silently substitute a module/region variant.
+- `362001068411` (HR13) and `362001071519` (AR11) have no established LAN target: `blocked_no_lan_target`. Do not invent or substitute an image.
+- The `362001067540` WR13 target is **2.06**, even though the observed cloud-only version is 2.04.
+- Use the manifest's exact `target_hid` only when positively evidenced. A null/missing full target HID or unresolved build provenance is `blocked_identity`; never manufacture an HID from labels or a version number. In particular, the `362001068295` UR 2.02 bundle has `target_hid: null`: it may be integrity-checked and hosted if separately approved, but do not approve or send an install until positive evidence establishes its exact emitted HID.
 
 Do not change `AutoUpdate` automatically. State that vendor/app automatic updates may later replace the restored LAN firmware; neither its default nor its prevention is established here.
 
-## 4. Download the exact original from Gree
+## 4. Verify the bundled original and serve the approved image
 
-Follow the bundled acquisition reference, serially: one request start per second globally across metadata, archive lookups, downloads, alternatives and redirect hops; obey its cooldowns and bounded retry limits. Query regional/auxiliary `Lastversion?firmwareCode=<code>` endpoints to find the selected **exact target**, not simply the currently advertised newest release. Do not add an invented `version=` parameter or treat cloud-only versions as numeric cutoffs.
+Normal runs use the exact unchanged original named by the matched manifest entry; they make no firmware metadata or image requests. Resolve `image` relative to the skill directory as `firmware/<image>`, and use the manifest's `size`, `sha256`, `source_url` and evidenced `target_hid` in the plan. Before hosting or approval, compare the bundled file's byte size and SHA-256 with the manifest. A missing file, mismatch or unresolved entry is `blocked_bundle_integrity`; do not download, overwrite or silently choose another version. Use a private wrapper to read manifest fields if needed.
 
-For an older target, use existing research or archive `.md` sidecars/history to recover an evidenced historical **official Gree image URL**. Archive metadata can locate it; this request requires the binary from Gree, so do not silently install a GitHub/mirror payload. If Gree no longer serves the exact candidate, report `blocked_download` with checked sources; another origin requires explicit scope approval.
+For an explicitly approved LAN host, set `image` to the absolute bundled file path, `sha256` to its manifest hash, `source_url` to the exact official Gree image URL recorded in the matching manifest entry, and `url` to `http://<approved-LAN-IPv4>/firmware.bin`. `source_url` is acquisition provenance, not the device-facing LAN origin; `provenance_url` is the separate evidence reference. Serve only through the existing helper:
 
-Download before asking any device to install. Preserve complete original bytes, metadata, final headers and source/effective URLs. Verify the transfer completed, `Content-Length` when present, `FileMd5` when present, SHA-256, code/module/region/version association and the known LAN-build hash when available. Inspect for HTML/JSON error bodies and conflicting embedded identity. Identical version labels do not establish identical builds. Do not fabricate hashes or treat MD5 as a signature. Keep one verified file per distinct hash while retaining each device's provenance association. Keep verified TLS enabled for firmware acquisition; the cloud guide's narrowly scoped TLS exception is not an acquisition fallback.
+```sh
+"$run/venv/bin/python" "$skill_dir/scripts/firmware_http.py" serve \
+  --image "$image" --sha256 "$sha256" --bind "$lan_ip"
+```
 
-### Device-facing image URL
+It serves only `/firmware.bin` with `Content-Length` and `FileMd5` on port 80. Keep it running through verification and any unresolved install. Preflight the LAN URL before approval:
 
-Prefer the official direct HTTP image URL when it serves the same hash-verified bytes. Use `firmware_http.py preflight` as described in [Cloud inventory and OTA](references/cloud-access.md); a successful host-side GET does not prove device reachability. For the optional direct-LAN route, the following URL limits are conservative observations for CS532AE, not universal rules for Gree cloud OTA or all device families:
+```sh
+"$run/venv/bin/python" "$skill_dir/scripts/firmware_http.py" preflight \
+  --url "$url" --image "$image" --sha256 "$sha256" --allow-lan
+```
+
+Do not copy the firmware folder or run metadata into a server directory, use a generic HTTP server, bind publicly, or change firewalls. If port 80 needs privileges or routing blocks the URL, report `blocked_url`; do not use automatic sudo, alter firewall/routing, or silently fall back to the official URL. Cloud install uses `--allow-lan-url`. A successful host-side preflight does not prove device reachability.
+
+For the optional direct-LAN route, URL limits below are conservative observations for CS532AE, not universal rules for Gree cloud OTA or all device families:
 
 - Plain ASCII `http://host/path`, at most 159 bytes; IPv4 or DNS resolving to IPv4; no credentials, explicit port, fragment, controls or whitespace. Port 80 only, with no HTTPS, authentication or redirect dependency.
 - Direct 200, positive `Content-Length`, uncompressed and unchunked bytes, small headers, and compatibility with an IP-valued `Host:` header. The inspected CS532AE parser may be fragile under TCP fragmentation.
 
-If explicitly approved, use the sibling `firmware_http.py serve` helper to host only the already verified, unchanged Gree image at `/firmware.bin` on an approved LAN IPv4 address, port 80. Do not use generic `python -m http.server`, expose run data, bind publicly, change firewalls, or run sudo automatically. A LAN URL is an explicit device-facing hosting exception, not a firmware-acquisition exception; preserve the official Gree `source_url` provenance. Keep the server running through verification, including an unconfirmed outcome until the user is informed.
+## 5. Request approved installation, one device at a time
 
-## 5. Request installation, one device at a time
-
-Finish target selection, acquisition, URL checks and approval first.
+Finish exact target selection, bundled-file integrity checks, approved LAN hosting, URL preflight and per-device approval first.
 
 ### Cloud OTA for cloud-only devices
 

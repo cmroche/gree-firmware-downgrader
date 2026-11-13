@@ -1,6 +1,6 @@
 # Gree Firmware Downgrader
 
-An assistant skill that finds Gree HVAC devices and restores local network control using known LAN-capable firmware. For cloud-only devices it can inventory the Gree account and request an approved cloud OTA downgrade, then verifies the reported firmware and local status afterward.
+An assistant skill that restores local Gree control using exact, bundled, verified LAN-capable firmware. Normal runs use bundled originals and verify each against the manifest. Bundled vendor firmware is separate from the project's GPL-3.0 license; redistribution rights are not asserted.
 
 [Firmware version reference](skills/gree-firmware-downgrader/references/firmware-versions.md)
 
