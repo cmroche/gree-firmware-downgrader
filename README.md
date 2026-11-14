@@ -33,8 +33,8 @@ Cloud-only families follow [greeclimate's inspected-build list](https://github.c
 | `362001067541` | `WB05WR11` | [`362001067541-v2.04.bin`](firmware/362001067541-v2.04.bin) | `362001067538+U-WB05WR11V2.08-test.bin` | — |
 | `362001068254` | `4MWB65VR` | [`362001068254-v2.11.bin`](firmware/362001068254-v2.11.bin) | `362001068254+U-4MWB65VRV2.12-eu.bin` | — |
 | `362001068295` | `4MWB05UR` | [`362001068295-v2.02.bin`](firmware/362001068295-v2.02.bin) | `362001068295+U-4MWB05URV2.04-eu.bin`<br>`362001068295+U-4MWB05URV2.04-test.bin` | — |
-| `362001068411` | `WB05HR13` | Not found | `362001068411-apiV1.02-test-history.bin` | — |
-| `362001071519` | `4MWB65AR11` | Not found | `362001067928+U-4MWB65AR11V2.00-test.bin` | — |
+| `362001068411` | `WB05HR13` | Not found | `362001068411-apiV1.02-test-history.bin` | [`362001068411-v2.07-local-only.bin`](firmware/362001068411-v2.07-local-only.bin) (experimental; fresh/reset Wi-Fi credential persistence still cloud-dependent; boot/installation unverified) |
+| `362001071519` | `4MWB65AR11` | Not found | `362001067928+U-4MWB65AR11V2.00-test.bin` | [`362001071519-v2.00-local-only.bin`](firmware/362001071519-v2.00-local-only.bin) (experimental; boot and secure-boot acceptance unverified) |
 | `362001000762` | `CS532AE(LT)` | `362001000762+U-CS532AE(LT)V3.33.bin` (not bundled) | Not established | [`362001000762-v3.33-local-only.bin`](firmware/362001000762-v3.33-local-only.bin) |
 
 ## Firmware selection
