@@ -1,10 +1,10 @@
 # Gree Firmware Downgrader
 
-Interactive Python tool for restoring local control with bundled firmware. Discovers physical Gree modules and lets you select compatible vendor or local-only firmware separately for every device.
+Tool for restoring LAN access to Gree devices, and optionally loading local-only firmware.
 
 ## Install and run
 
-Requires Python 3.11+ and access to the devices' LAN.
+Requires Python 3.11+ and access to the LAN so that the script can server the firmware update to your device.
 
 ```sh
 python3 -m venv .venv
@@ -18,7 +18,24 @@ To include cloud-only devices, specify your Gree+ account's region:
 .venv/bin/python downgrade.py --region Europe
 ```
 
+Valid `--region` values: `Australia`, `China Mainland`, `East South Asia`, `Europe`, `India`, `Middle East`, `North American`, `Russia`, `South American`. Quote names containing spaces, for example `--region "North American"`.
+
 The tool prompts privately for cloud credentials, or reads `GREE_USERNAME` and `GREE_PASSWORD`. Cloud access has an explicit certificate-validation warning; do not use it on an untrusted network.
+
+## Firmware reference
+
+Cloud-only families follow [greeclimate's inspected-build list](https://github.com/cmroche/greeclimate/blob/main/docs/CLOUD_ONLY_FIRMWARE.md) dated 17 October 2026. Filenames below identify representative inspected files; linked files are bundled here. The additional CS532AE row covers a LAN-capable build with local-only firmware, not an established cloud-only family.
+
+| Firmware code | Module | Latest verified LAN firmware | Earliest observed cloud-only firmware | Bundled local-only firmware |
+|---|---|---|---|---|
+| `362001066300` | `4MWB05DF13` | [`362001066300-v3.05.bin`](firmware/362001066300-v3.05.bin) | `362001066300+U-4MWB05DF13V3.27-eu.bin` | — |
+| `362001067540` | `WB05WR13` | [`362001067540-v2.06.bin`](firmware/362001067540-v2.06.bin) | `362001067540+U-WB05WR13V2.04-test.bin` | — |
+| `362001067541` | `WB05WR11` | [`362001067541-v2.04.bin`](firmware/362001067541-v2.04.bin) | `362001067538+U-WB05WR11V2.08-test.bin` | — |
+| `362001068254` | `4MWB65VR` | [`362001068254-v2.11.bin`](firmware/362001068254-v2.11.bin) | `362001068254+U-4MWB65VRV2.12-eu.bin` | — |
+| `362001068295` | `4MWB05UR` | [`362001068295-v2.02.bin`](firmware/362001068295-v2.02.bin) | `362001068295+U-4MWB05URV2.04-eu.bin`<br>`362001068295+U-4MWB05URV2.04-test.bin` | — |
+| `362001068411` | `WB05HR13` | Not found | `362001068411-apiV1.02-test-history.bin` | — |
+| `362001071519` | `4MWB65AR11` | Not found | `362001067928+U-4MWB65AR11V2.00-test.bin` | — |
+| `362001000762` | `CS532AE(LT)` | `362001000762+U-CS532AE(LT)V3.33.bin` (not bundled) | Not established | [`362001000762-v3.33-local-only.bin`](firmware/362001000762-v3.33-local-only.bin) |
 
 ## Firmware selection
 
