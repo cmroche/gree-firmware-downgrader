@@ -2,6 +2,10 @@
 
 Tool for restoring LAN access to Gree devices, and optionally loading local-only firmware.
 
+The local-only firmware disables access to Gree cloud, and telemetry serivces. And in some casese where stock firmware doesn't provide LAN access, restores it fully.
+
+It's possible to revert back to stock firmware from local-only, as the local API supports `upgrade` commands.
+
 ## Install and run
 
 Requires Python 3.11+ and access to the LAN so that the script can server the firmware update to your device.
@@ -33,22 +37,10 @@ Cloud-only families follow [greeclimate's inspected-build list](https://github.c
 | `362001067541` | `WB05WR11` | [`362001067541-v2.04.bin`](firmware/362001067541-v2.04.bin) | `362001067538+U-WB05WR11V2.08-test.bin` | — |
 | `362001068254` | `4MWB65VR` | [`362001068254-v2.11.bin`](firmware/362001068254-v2.11.bin) | `362001068254+U-4MWB65VRV2.12-eu.bin` | — |
 | `362001068295` | `4MWB05UR` | [`362001068295-v2.02.bin`](firmware/362001068295-v2.02.bin) | `362001068295+U-4MWB05URV2.04-eu.bin`<br>`362001068295+U-4MWB05URV2.04-test.bin` | — |
-| `362001068411` | `WB05HR13` | Not found | `362001068411-apiV1.02-test-history.bin` | [`362001068411-v2.07-local-only.bin`](firmware/362001068411-v2.07-local-only.bin) (experimental; fresh/reset Wi-Fi credential persistence still cloud-dependent; boot/installation unverified) |
-| `362001071519` | `4MWB65AR11` | Not found | `362001067928+U-4MWB65AR11V2.00-test.bin` | [`362001071519-v2.00-local-only.bin`](firmware/362001071519-v2.00-local-only.bin) (experimental; boot and secure-boot acceptance unverified) |
-| `362001000762` | `CS532AE(LT)` | `362001000762+U-CS532AE(LT)V3.33.bin` (not bundled) | Not established | [`362001000762-v3.33-local-only.bin`](firmware/362001000762-v3.33-local-only.bin) |
+| `362001068411` | `WB05HR13` | Not available| `362001068411-apiV1.02-test-history.bin` | [`362001068411-v2.07-local-only.bin`](firmware/362001068411-v2.07-local-only.bin) |
+| `362001071519` | `4MWB65AR11` | Not available | `362001067928+U-4MWB65AR11V2.00-test.bin` | [`362001071519-v2.00-local-only.bin`](firmware/362001071519-v2.00-local-only.bin) |
+| `362001000762` | `CS532AE(LT)` | Not bundled | Not applicable| [`362001000762-v3.33-local-only.bin`](firmware/362001000762-v3.33-local-only.bin) |
 
-## Firmware selection
+## Other information
 
-- Each identified device offers **keep current** and all compatible bundled images. Matching uses firmware code/module, not numeric version ordering.
-- Local-only images are `firmware/*-local-only.bin`; they need no separate catalog or additional approval.
-- All choices are collected before updates start. Selecting an image authorizes one update for that device. Unsupported and blocked devices remain visible.
-- Images are served unchanged from distinct SHA-256 URLs on LAN port 80. The tool never downloads firmware or retries an OTA automatically.
-
-Use `--bind <this-computer's-LAN-IPv4>` if automatic interface selection is unsuitable. Port 80 must be available and reachable from the devices. If your OS requires administrator privileges, use an elevated terminal; the tool does not escalate privileges or change firewall/routing settings.
-
-Updates run one device at a time, with fresh identity checks and post-update LAN observations. An unresolved update stops subsequent installations and keeps hosting available until Ctrl-C. Private operation records are under `${XDG_STATE_HOME:-~/.local/state}/gree-firmware-downgrader/`.
-
-Flashing can brick a module or lose pairing/settings. Keep power stable. LAN availability and an unchanged HID cannot prove the installed bytes of a local-only image; the tool does not claim flash readback or physical HVAC verification.
-
-Project code: [GPL-3.0](LICENSE). Vendor firmware redistribution rights remain unverified.
-
+Firmware is served by opening an HTTP service from your local PC on port 80. If automatic network selection doesn't work, specify the interface with `--bind <this-computer's-LAN-IPv4>`.
