@@ -28,7 +28,7 @@ The tool prompts privately for cloud credentials, or reads `GREE_USERNAME` and `
 
 ## Firmware reference
 
-Cloud-only families follow [greeclimate's inspected-build list](https://github.com/cmroche/greeclimate/blob/main/docs/CLOUD_ONLY_FIRMWARE.md) dated 17 October 2026. Filenames below identify representative inspected files; linked files are bundled here. The additional CS532AE row covers a LAN-capable build with local-only firmware, not an established cloud-only family.
+Known cloud-only devices and firmware versions.
 
 | Firmware code | Module | Latest verified LAN firmware | Earliest observed cloud-only firmware | Bundled local-only firmware |
 |---|---|---|---|---|
