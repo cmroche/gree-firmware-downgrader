@@ -52,11 +52,13 @@ Prefer restoring the existing LAN path. If transport is absent, add the smallest
 
 Accept only the intended LAN envelopes (`scan`/`pack` where native), preserve authentication failures, reject truncated/oversized packets and reply to each datagram's actual peer. Trace signed crypto/error returns through callers and narrowing conversions so failures cannot become success. Recover socket/allocation failures without replaying commands. Establish local operation before removing its cloud dependencies; do not fake cloud-connected status.
 
+Always retain the local firmware update/revert command (`upgrade` in the native protocol), its authenticated LAN dispatch, URL scheduler and updater. Cloud removal must not disable or stub this path; user-requested HTTP downloads are not automatic cloud traffic.
+
 ## 5. Disable cloud access
 
 Bypass the proven cloud dispatcher/startup calls and independent telemetry workers, not the entire Wi-Fi task. If replacing a cloud task, retain its required local initialization, scheduler and hardware services. Verify first-time/reset provisioning, credential commit and reconnect without cloud; if unresolved, report that limit rather than claiming complete offline operation.
 
-List retained outbound paths explicitly. Disable a proven URL-update route if required by the requested offline scope; do not blacklist properties by name or call the result a WAN firewall while NTP, requested HTTP or diagnostics remain reachable.
+List retained outbound paths explicitly, including user-requested HTTP firmware downloads. Never disable local update/revert to enforce “local-only”; do not blacklist properties by name or call the result a WAN firewall while NTP, requested HTTP or diagnostics remain reachable.
 
 # Validation
 
@@ -64,6 +66,8 @@ List retained outbound paths explicitly. Disable a proven URL-update route if re
 
 1. Verify image integrity and reproducibility
 2. Exercise native LAN and lifecycle behavior
+3. Independently reproduce the build and validation
+4. Exercise a real client through loopback UDP
 
 ## 1. Verify image integrity and reproducibility
 
@@ -89,6 +93,20 @@ Derive lifecycle fixtures from startup/reset paths, comparing fresh/unconfirmed 
 
 Obtain separate independent reviews of patch/ABI safety and validation claims, including modeled callback identities, synthetic initialization and whether hooks skip the behavior claimed. Resolve findings against native bytes or execution before finalizing results; static review is not independent test reproduction.
 
+## 3. Independently reproduce the build and validation
+
+Use a fresh isolated environment and temporary workspace, with pinned dependencies, source images, toolchain and validation inputs. Rebuild injected code and the candidate from the unchanged original; independently compare hashes, changed-byte ranges and integrity fields, then rerun the focused native, lifecycle and updater checks. Preserve original artifacts and frozen expectations. Record reproducible commands, environment versions, input hashes and actual results; do not call reuse of an existing environment a clean reproduction.
+
+Have an independent reviewer inspect native bytes, emulator hooks and expected results for shared assumptions or bypassed behavior. A successful rerun with the same models is reproduction, not independent proof of those models; static review alone is not execution.
+
+## 4. Exercise a real client through loopback UDP
+
+Connect an actual Gree client over real loopback UDP to the native firmware emulator. Adapt only OS/socket boundaries: pass actual datagrams and peer endpoints into native parsing, crypto, dispatch and reply code, and return its actual wire bytes. Do not substitute a Python protocol implementation. Cover discovery, binding, default polling, commands and cached-state readback; independently decrypt/authenticate replies where applicable, suppress credential/key logging and close transports/tasks deterministically.
+
+Always exercise candidate-side encrypted LAN upgrade and revert dispatch using test-only URLs and modeled task/flash boundaries; require the real URL scheduler to register the updater, not merely acknowledge the request. Where supported, execute the native updater and compare programmed bytes and slot state for candidate and original images; distinguish dispatch, modeled installation and reboot continuity. Direct stock-updater entry does not prove this candidate consumer path. Restrict runtime networking to loopback, never discover or command physical equipment, and record the client version/source, checks and every synthetic state or modeled boundary. Do not infer hardware, radio, UART completion or boot acceptance from client interoperability.
+
 Report reproducible commands/results and every modeled ROM/SDK, crypto, flash, network and device-state boundary. Missing full boot, radio, persistent provisioning, UART acknowledgement, bootloader/eFuse policy or recovery evidence remains an explicit limitation, not a passing test. If execution tools are unavailable, label the candidate statically reviewed only.
 
 Deliver the separate experimental image, builder, patch manifest and concise validation report, including retained WAN paths and unresolved risks. Preserve the original HID unless a justified identity change is required; an unchanged HID cannot prove installation. No flash approval follows from offline validation; hardware acceptance and recovery require a separately authorized procedure. Do not publish vendor binaries without established redistribution rights.
+
+At the end of every firmware-patching task, include a user-facing table listing every patched address/range, its file offset, what changed and why. Include injected code/data and repaired checksum/digest fields; distinguish runtime addresses from file-only offsets. Show original → replacement bytes or instructions for short patches, and summarize larger payloads with a link to the complete byte-level manifest. Do not replace this final patch list with only an artifact link or validation summary.

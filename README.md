@@ -27,16 +27,16 @@ Valid `--region` values: `Australia`, `China Mainland`, `East South Asia`, `Euro
 The tool prompts privately for cloud credentials, or reads `GREE_USERNAME` and `GREE_PASSWORD`. Cloud access has an explicit certificate-validation warning; do not use it on an untrusted network.
 
 ## Firmware reference
-
+  
 Known cloud-only devices and firmware versions.
 
 | Firmware code | Module | Latest verified LAN firmware | Earliest observed cloud-only firmware | Bundled local-only firmware |
 |---|---|---|---|---|
 | `362001066300` | `4MWB05DF13` | [`362001066300-v3.05.bin`](firmware/362001066300-v3.05.bin) | `362001066300+U-4MWB05DF13V3.27-eu.bin` | [`362001066300-v3.05-local-only.bin`](firmware/362001066300-v3.05-local-only.bin) |
-| `362001067540` | `WB05WR13` | [`362001067540-v2.06.bin`](firmware/362001067540-v2.06.bin) | `362001067540+U-WB05WR13V2.04-test.bin` | — |
-| `362001067541` | `WB05WR11` | [`362001067541-v2.04.bin`](firmware/362001067541-v2.04.bin) | `362001067538+U-WB05WR11V2.08-test.bin` | — |
-| `362001068254` | `4MWB65VR` | [`362001068254-v2.11.bin`](firmware/362001068254-v2.11.bin) | `362001068254+U-4MWB65VRV2.12-eu.bin` | — |
-| `362001068295` | `4MWB05UR` | [`362001068295-v2.02.bin`](firmware/362001068295-v2.02.bin) | `362001068295+U-4MWB05URV2.04-eu.bin`<br>`362001068295+U-4MWB05URV2.04-test.bin` | — |
+| `362001067540` | `WB05WR13` | [`362001067540-v2.06.bin`](firmware/362001067540-v2.06.bin) | `362001067540+U-WB05WR13V2.04-test.bin` | [`362001067540-v2.06-local-only.bin`](firmware/362001067540-v2.06-local-only.bin) |
+| `362001067541` | `WB05WR11` | [`362001067541-v2.04.bin`](firmware/362001067541-v2.04.bin) | `362001067538+U-WB05WR11V2.08-test.bin` | [`362001067541-v2.04-local-only.bin`](firmware/362001067541-v2.04-local-only.bin) |
+| `362001068254` | `4MWB65VR` | [`362001068254-v2.11.bin`](firmware/362001068254-v2.11.bin) | `362001068254+U-4MWB65VRV2.12-eu.bin` | [`362001068254-v2.11-local-only.bin`](firmware/362001068254-v2.11-local-only.bin) |
+| `362001068295` | `4MWB05UR` | [`362001068295-v2.02.bin`](firmware/362001068295-v2.02.bin) | `362001068295+U-4MWB05URV2.04-eu.bin` | [`362001068295-v2.02-local-only.bin`](firmware/362001068295-v2.02-local-only.bin) |
 | `362001068411` | `WB05HR13` | Not available| `362001068411-apiV1.02-test-history.bin` | [`362001068411-v2.07-local-only.bin`](firmware/362001068411-v2.07-local-only.bin) |
 | `362001071519` | `4MWB65AR11` | Not available | `362001067928+U-4MWB65AR11V2.00-test.bin` | [`362001071519-v2.00-local-only.bin`](firmware/362001071519-v2.00-local-only.bin) |
 | `362001000762` | `CS532AE(LT)` | Not bundled | Not applicable| [`362001000762-v3.33-local-only.bin`](firmware/362001000762-v3.33-local-only.bin) |
