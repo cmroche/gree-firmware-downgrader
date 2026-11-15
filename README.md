@@ -32,7 +32,7 @@ Known cloud-only devices and firmware versions.
 
 | Firmware code | Module | Latest verified LAN firmware | Earliest observed cloud-only firmware | Bundled local-only firmware |
 |---|---|---|---|---|
-| `362001066300` | `4MWB05DF13` | [`362001066300-v3.05.bin`](firmware/362001066300-v3.05.bin) | `362001066300+U-4MWB05DF13V3.27-eu.bin` | — |
+| `362001066300` | `4MWB05DF13` | [`362001066300-v3.05.bin`](firmware/362001066300-v3.05.bin) | `362001066300+U-4MWB05DF13V3.27-eu.bin` | [`362001066300-v3.05-local-only.bin`](firmware/362001066300-v3.05-local-only.bin) |
 | `362001067540` | `WB05WR13` | [`362001067540-v2.06.bin`](firmware/362001067540-v2.06.bin) | `362001067540+U-WB05WR13V2.04-test.bin` | — |
 | `362001067541` | `WB05WR11` | [`362001067541-v2.04.bin`](firmware/362001067541-v2.04.bin) | `362001067538+U-WB05WR11V2.08-test.bin` | — |
 | `362001068254` | `4MWB65VR` | [`362001068254-v2.11.bin`](firmware/362001068254-v2.11.bin) | `362001068254+U-4MWB65VRV2.12-eu.bin` | — |
